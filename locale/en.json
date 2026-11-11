@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session Folders",
+    "description": "Creates a dedicated subfolder inside a workspace when a session starts its first conversation, and keeps files produced by that session there. Can be enabled or disabled per workspace."
+  }
+}

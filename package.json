@@ -1,0 +1,51 @@
+{
+  "name": "dsh-session-folders",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Create a per-session subfolder in a workspace on the session's first conversation, with per-workspace UI toggles.",
+  "license": "MIT",
+  "author": "DieJob",
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "session",
+    "workspace"
+  ],
+  "homepage": "https://github.com/DieJob/dsh-session-folders",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DieJob/dsh-session-folders.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DieJob/dsh-session-folders/issues"
+  },
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/en.json",
+    "locale/zh.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

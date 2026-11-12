@@ -1,8 +1,8 @@
 {
   "name": "dsh-session-folders",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "Create a per-session subfolder in a workspace on the session's first conversation, with per-workspace UI toggles.",
+  "description": "Create summary-named per-session folders in a workspace, with per-workspace UI toggles and folder inheritance for new sessions.",
   "license": "MIT",
   "author": "DieJob",
   "keywords": [

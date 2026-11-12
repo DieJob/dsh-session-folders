@@ -6,7 +6,9 @@ window.__ModuleLoader__.load({
 
     const NS = 'session-folders'
     const STATE_URL = '/session-folders/state'
+    const SESSION_URL = '/session-folders/session'
     const WORKSPACE_URL = '/session-folders/workspace'
+    const INHERIT_URL = '/session-folders/inherit'
 
     const DICTS = {
       zh: {
@@ -20,7 +22,13 @@ window.__ModuleLoader__.load({
         'settings.retry': '重试',
         'settings.toggleTitle': '切换会话文件夹',
         'settings.folderCount': '已创建 {count} 个会话文件夹',
+        'settings.sessionCount': '共 {count} 个会话',
         'settings.saveFailed': '保存失败，请重试。',
+        'inherit.action': '继承文件夹',
+        'inherit.title': '新建会话并继承当前会话的文件夹',
+        'inherit.busy': '创建中…',
+        'inherit.failed': '继承失败，请重试。',
+        'inherit.noFolder': '当前会话还没有会话文件夹。',
         'settings.enabled': '已开启',
         'settings.disabled': '未开启',
         'config.summary': '按工作区配置会话文件夹',
@@ -46,7 +54,13 @@ window.__ModuleLoader__.load({
         'settings.retry': 'Retry',
         'settings.toggleTitle': 'Toggle session folders',
         'settings.folderCount': '{count} session folder(s) created',
+        'settings.sessionCount': '{count} session(s)',
         'settings.saveFailed': 'Could not save. Please retry.',
+        'inherit.action': 'Inherit folder',
+        'inherit.title': 'Create a new session that inherits this session folder',
+        'inherit.busy': 'Creating…',
+        'inherit.failed': 'Could not inherit. Please retry.',
+        'inherit.noFolder': 'This session does not have a session folder yet.',
         'settings.enabled': 'Enabled',
         'settings.disabled': 'Disabled',
         'config.summary': 'Configure session folders per workspace',
@@ -143,6 +157,11 @@ window.__ModuleLoader__.load({
       '.dsf-btn-primary:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}',
       '.dsf-btn-secondary{border-color:var(--dsw-alias-border-l3);background:transparent;color:var(--dsw-alias-label-primary)}',
       '.dsf-btn-secondary:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}',
+      '.dsf-action{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;height:26px;padding:0 9px;border:1px solid var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:12px;line-height:18px;white-space:nowrap}',
+      '.dsf-action:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}',
+      '.dsf-action:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px}',
+      '.dsf-action:disabled{opacity:.55;cursor:default}',
+      '.dsf-action-error{font-size:11px;line-height:16px;color:var(--dsw-alias-state-error-primary);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
     ].join('\n')
 
     function installStyles() {
@@ -173,7 +192,7 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots', 'locale'],
+      inject: ['slots', 'locale', 'uiWorkspace', 'workspaces'],
       apply(ctx) {
         const bound = ctx.locale && typeof ctx.locale.bind === 'function' ? ctx.locale.bind(NS) : null
         const t = (key, vars) => {
@@ -262,7 +281,7 @@ window.__ModuleLoader__.load({
                 h('div', { className: 'dsf-row-main' },
                   h('div', { className: 'dsf-row-title', title: workspace.path }, workspace.title || workspace.path),
                   h('div', { className: 'dsf-row-path', title: workspace.path }, workspace.path),
-                  h('div', { className: 'dsf-row-meta' }, formatText(t('settings.folderCount'), { count: workspace.folderCount ?? 0 })),
+                  h('div', { className: 'dsf-row-meta' }, `${formatText(t('settings.folderCount'), { count: workspace.folderCount ?? 0 })} · ${formatText(t('settings.sessionCount'), { count: workspace.sessionCount ?? 0 })}`),
                 ),
                 h('button', {
                   type: 'button',
@@ -277,6 +296,87 @@ window.__ModuleLoader__.load({
               )
             }),
             actionError !== null ? h('div', { className: 'dsf-error' }, actionError) : null,
+          )
+        }
+
+        function workspaceIdOfSession(sessionId) {
+          try {
+            const snapshot = ctx.workspaces.list.getSnapshot()
+            const items = Array.isArray(snapshot?.items) ? snapshot.items : []
+            const item = items.find((workspace) => Array.isArray(workspace.sessionIds) && workspace.sessionIds.includes(sessionId))
+            return item?.workspaceId
+          } catch {
+            return undefined
+          }
+        }
+
+        function InheritAction(props) {
+          useLocaleTick(ctx)
+          const sessionId = typeof props?.sessionId === 'string'
+            ? props.sessionId
+            : typeof props?.session?.id === 'string' ? props.session.id : ''
+          const [folder, setFolder] = React.useState(null)
+          const [busy, setBusy] = React.useState(false)
+          const [error, setError] = React.useState('')
+
+          React.useEffect(() => {
+            let alive = true
+            if (sessionId === '') {
+              setFolder(null)
+              return () => { alive = false }
+            }
+            function load() {
+              fetchJson(`${SESSION_URL}?sessionId=${encodeURIComponent(sessionId)}`)
+                .then((data) => {
+                  if (alive) setFolder(data?.folder ?? null)
+                })
+                .catch(() => {
+                  if (alive) setFolder(null)
+                })
+            }
+            load()
+            const timer = setInterval(load, 3000)
+            return () => {
+              alive = false
+              clearInterval(timer)
+            }
+          }, [sessionId])
+
+          async function startInherit() {
+            if (busy || folder === null) return
+            const workspaceId = workspaceIdOfSession(sessionId)
+            if (workspaceId === undefined) {
+              setError(t('inherit.failed'))
+              return
+            }
+            setBusy(true)
+            setError('')
+            try {
+              const newSessionId = await ctx.uiWorkspace.connectWorkspace(workspaceId)
+              const result = await fetchJson(INHERIT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fromSessionId: sessionId, newSessionId }),
+              })
+              if (!result || result.ok !== true) throw new Error(result?.error || t('inherit.failed'))
+              ctx.uiWorkspace.openSession(newSessionId)
+            } catch (cause) {
+              setError(String(cause?.message || cause))
+            } finally {
+              setBusy(false)
+            }
+          }
+
+          if (folder === null) return null
+          return h('span', { className: 'dsf-action-wrap' },
+            h('button', {
+              type: 'button',
+              className: 'dsf-action',
+              title: error || t('inherit.title'),
+              disabled: busy,
+              onClick: startInherit,
+            }, busy ? t('inherit.busy') : t('inherit.action')),
+            error !== '' ? h('span', { className: 'dsf-action-error', title: error }, error) : null,
           )
         }
 
@@ -440,6 +540,16 @@ window.__ModuleLoader__.load({
             key: 'dsh-session-folders',
             locale: NS,
           }, BundleConfigCard),
+        )
+
+        ctx.slots.inject('conversation.session.header.actions', () =>
+          ctx.slots.register({
+            name: 'conversation.session.header.actions',
+            id: 'dsh-session-folders.inherit',
+            order: 60,
+            locale: NS,
+            label: () => t('inherit.action'),
+          }, InheritAction),
         )
 
         ctx.slots.inject('shell.overlay', () =>
